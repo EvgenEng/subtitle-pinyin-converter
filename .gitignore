@@ -1,0 +1,29 @@
+# Java
+*.class
+*.log
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+
+# Application
+uploads/
+temp/
+converted/
+application-*.yml
+!application.yml
+
+# Build
+out/
+build/
+dist/
