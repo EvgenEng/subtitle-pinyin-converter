@@ -2,7 +2,6 @@ package com.subtitle.exception;
 
 import com.subtitle.controller.dto.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -17,7 +16,6 @@ import java.util.stream.Collectors;
 
 /**
  * Global exception handler for the application.
- *
  */
 @Slf4j
 @RestControllerAdvice
@@ -25,27 +23,25 @@ public class GlobalExceptionHandler {
 
     /**
      * Handle BusinessException.
-     *
-     * @param ex BusinessException instance
-     * @return ResponseEntity with error details
      */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
-        log.error("Business exception occurred: {}", ex.getMessage(), ex);
+
+        ErrorCode error = ex.getErrorCode();
+
+        log.warn("Business exception [{}]: {}", error.getCode(), ex.getMessage());
 
         ApiResponse<Void> response = ApiResponse.error(
                 ex.getMessage(),
-                ex.getErrorCode()
+                error.getCode(),
+                error.getStatus()
         );
 
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        return ResponseEntity.status(error.getStatus()).body(response);
     }
 
     /**
-     * Handle validation exceptions.
-     *
-     * @param ex MethodArgumentNotValidException instance
-     * @return ResponseEntity with validation errors
+     * Handle validation exceptions (@Valid).
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationExceptions(
@@ -57,110 +53,104 @@ public class GlobalExceptionHandler {
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(", "));
 
-        log.error("Validation error: {}", errors);
+        log.warn("Validation error: {}", errors);
 
         ApiResponse<Void> response = ApiResponse.error(
                 "Validation failed: " + errors,
                 "VALIDATION_ERROR"
         );
 
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        return ResponseEntity.badRequest().body(response);
     }
 
     /**
-     * Handle constraint violation exceptions.
-     *
-     * @param ex ConstraintViolationException instance
-     * @return ResponseEntity with violation details
+     * Handle constraint violations.
      */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(
             ConstraintViolationException ex) {
 
-        log.error("Constraint violation: {}", ex.getMessage());
+        log.warn("Constraint violation: {}", ex.getMessage());
 
         ApiResponse<Void> response = ApiResponse.error(
                 "Validation error: " + ex.getMessage(),
                 "CONSTRAINT_VIOLATION"
         );
 
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        return ResponseEntity.badRequest().body(response);
     }
 
     /**
-     * Handle file size exceeded exception.
-     *
-     * @param ex MaxUploadSizeExceededException instance
-     * @return ResponseEntity with error details
+     * Handle file size exceeded.
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleMaxSizeException(
             MaxUploadSizeExceededException ex) {
 
-        log.error("File size exceeded: {}", ex.getMessage());
+        log.warn("File too large: {}", ex.getMessage());
 
         ApiResponse<Void> response = ApiResponse.error(
-                "File size exceeds maximum limit",
-                ErrorCode.FILE_TOO_LARGE.getCode()
+                ErrorCode.FILE_TOO_LARGE.getMessage(),
+                ErrorCode.FILE_TOO_LARGE.getCode(),
+                ErrorCode.FILE_TOO_LARGE.getStatus()
         );
 
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        return ResponseEntity
+                .status(ErrorCode.FILE_TOO_LARGE.getStatus())
+                .body(response);
     }
 
     /**
-     * Handle multipart exceptions.
-     *
-     * @param ex MultipartException instance
-     * @return ResponseEntity with error details
+     * Handle multipart errors.
      */
     @ExceptionHandler(MultipartException.class)
     public ResponseEntity<ApiResponse<Void>> handleMultipartException(MultipartException ex) {
 
-        log.error("Multipart error: {}", ex.getMessage());
+        log.warn("Multipart error: {}", ex.getMessage());
 
         ApiResponse<Void> response = ApiResponse.error(
                 "File upload error: " + ex.getMessage(),
                 "UPLOAD_ERROR"
         );
 
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        return ResponseEntity.badRequest().body(response);
     }
 
     /**
-     * Handle IO exceptions.
-     *
-     * @param ex IOException instance
-     * @return ResponseEntity with error details
+     * Handle IO errors.
      */
     @ExceptionHandler(IOException.class)
     public ResponseEntity<ApiResponse<Void>> handleIOException(IOException ex) {
 
-        log.error("IO error: {}", ex.getMessage(), ex);
+        log.error("IO error", ex);
 
         ApiResponse<Void> response = ApiResponse.error(
-                "File processing error: " + ex.getMessage(),
-                ErrorCode.FILE_READ_ERROR.getCode()
+                ErrorCode.FILE_READ_ERROR.getMessage(),
+                ErrorCode.FILE_READ_ERROR.getCode(),
+                ErrorCode.FILE_READ_ERROR.getStatus()
         );
 
-        return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+        return ResponseEntity
+                .status(ErrorCode.FILE_READ_ERROR.getStatus())
+                .body(response);
     }
 
     /**
      * Handle all other exceptions.
-     *
-     * @param ex Exception instance
-     * @return ResponseEntity with generic error
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
 
-        log.error("Unexpected error occurred", ex);
+        log.error("Unexpected error", ex);
 
         ApiResponse<Void> response = ApiResponse.error(
-                "An unexpected error occurred",
-                ErrorCode.INTERNAL_ERROR.getCode()
+                ErrorCode.INTERNAL_ERROR.getMessage(),
+                ErrorCode.INTERNAL_ERROR.getCode(),
+                ErrorCode.INTERNAL_ERROR.getStatus()
         );
 
-        return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+        return ResponseEntity
+                .status(ErrorCode.INTERNAL_ERROR.getStatus())
+                .body(response);
     }
 }

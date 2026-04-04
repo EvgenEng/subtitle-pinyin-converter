@@ -6,7 +6,6 @@ import org.springframework.http.HttpStatus;
 
 /**
  * Enumeration of error codes used throughout the application.
- *
  */
 @Getter
 @RequiredArgsConstructor
