@@ -11,7 +11,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
 @RestController
@@ -22,25 +27,12 @@ public class SubtitleController {
 
     private final SubtitleService subtitleService;
 
+    /**
+     * Convert SRT file to Pinyin.
+     */
     @PostMapping(value = "/convert", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<SubtitleResponse>> convertToPinyin(
             @Valid @ModelAttribute SubtitleUploadRequest request) {
-
-        //1. Проверка на пустой файл
-        if (request.getFile() == null || request.getFile().isEmpty()) {
-            return ResponseEntity.badRequest().body(
-                    ApiResponse.error("File cannot be empty", "FILE_EMPTY")
-            );
-        }
-
-        //2. Проверка расширения файла
-        String fileName = request.getFile().getOriginalFilename();
-
-        if (fileName == null || !fileName.toLowerCase().endsWith(".srt")) {
-            return ResponseEntity.badRequest().body(
-                    ApiResponse.error("Only .srt files are allowed", "INVALID_FILE_TYPE")
-            );
-        }
 
         SubtitleResponse response = subtitleService.convertSrtToPinyin(
                 request.getFile(),
@@ -52,11 +44,17 @@ public class SubtitleController {
         );
     }
 
+    /**
+     * Download converted subtitle file.
+     */
     @GetMapping("/download/{fileName}")
     public ResponseEntity<Resource> downloadFile(@PathVariable String fileName) {
         return subtitleService.download(fileName);
     }
 
+    /**
+     * Validate SRT file.
+     */
     @PostMapping(value = "/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<Void>> validateFile(
             @Valid @ModelAttribute SubtitleUploadRequest request) {
@@ -68,6 +66,9 @@ public class SubtitleController {
         );
     }
 
+    /**
+     * Health check endpoint.
+     */
     @GetMapping("/health")
     public ResponseEntity<ApiResponse<String>> healthCheck() {
         return ResponseEntity.ok(

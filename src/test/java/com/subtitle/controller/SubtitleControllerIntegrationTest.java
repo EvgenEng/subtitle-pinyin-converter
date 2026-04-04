@@ -9,6 +9,8 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -79,5 +81,35 @@ class SubtitleControllerIntegrationTest {
                         .file(file))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void shouldDownloadFileSuccessfully() throws Exception {
+
+        String srtContent = """
+            1
+            00:00:01,000 --> 00:00:03,000
+            你好
+            """;
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "test.srt",
+                MediaType.TEXT_PLAIN_VALUE,
+                srtContent.getBytes()
+        );
+
+        // сначала загружаем файл
+        mockMvc.perform(multipart("/api/v1/subtitle/convert")
+                        .file(file)
+                        .param("pinyinFormat", "WITH_SPACES")
+                        .param("convertNonChinese", "false"))
+                .andExpect(status().isOk());
+
+        // потом скачиваем
+        mockMvc.perform(get("/api/v1/subtitle/download/test_pinyin.srt"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition",
+                        org.hamcrest.Matchers.containsString("attachment")));
     }
 }
