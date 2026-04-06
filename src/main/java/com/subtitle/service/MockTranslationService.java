@@ -1,12 +1,11 @@
 package com.subtitle.service;
 
-import com.subtitle.service.TranslationService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 /**
  * Mock implementation of TranslationService.
- * Will be replaced with DeepSeek integration later.
  */
 @Slf4j
 public class MockTranslationService implements TranslationService {
@@ -21,5 +20,12 @@ public class MockTranslationService implements TranslationService {
         log.debug("Mock translating: {}", text);
 
         return "[RU] " + text;
+    }
+
+    @Override
+    public List<String> translateBatch(List<String> texts) {
+        return texts.stream()
+                .map(text -> "[RU] " + text)
+                .toList();
     }
 }

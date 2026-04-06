@@ -20,6 +20,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Implementation of SubtitleService.
@@ -59,22 +61,48 @@ public class SubtitleServiceImpl implements SubtitleService {
 
             log.debug("Parsed {} subtitle blocks", subtitleFile.getBlockCount());
 
-            // 4. Process each block
-            for (SubtitleBlock block : subtitleFile.getBlocks()) {
+            List<SubtitleBlock> blocks = subtitleFile.getBlocks();
 
+            // 4. Collect originals
+            List<String> originals = blocks.stream()
+                    .map(SubtitleBlock::getOriginalText)
+                    .toList();
+
+            // 5. Batch translate (safe)
+            List<String> translations = Collections.emptyList();
+
+            if (request.getMode() == SubtitleUploadRequest.SubtitleMode.TRIPLE) {
+                try {
+                    translations = translationService.translateBatch(originals);
+                } catch (Exception e) {
+                    log.warn("Batch translation failed, fallback will be used", e);
+                    translations = Collections.emptyList();
+                }
+            }
+
+            // 6. Process blocks
+            for (int i = 0; i < blocks.size(); i++) {
+
+                SubtitleBlock block = blocks.get(i);
                 String original = block.getOriginalText();
 
-                String pinyin = pinyinConverter.convertToPinyin(
-                        original,
-                        request
-                );
+                // pinyin
+                String pinyin = pinyinConverter.convertToPinyin(original, request);
 
+                // translation (safe)
                 String translated = null;
 
-                if (request.getMode() == SubtitleUploadRequest.SubtitleMode.TRIPLE) {
-                    translated = translationService.translateToRussian(original);
+                if (!translations.isEmpty() && i < translations.size()) {
+                    translated = translations.get(i);
+                    if (translated != null) {
+                        translated = translated.trim();
+                    }
+                } else if (request.getMode() == SubtitleUploadRequest.SubtitleMode.TRIPLE) {
+                    // fallback if batch failed completely
+                    translated = "[RU] " + original;
                 }
 
+                // format
                 String finalText = formatter.format(
                         original,
                         pinyin,
@@ -85,10 +113,10 @@ public class SubtitleServiceImpl implements SubtitleService {
                 block.setConvertedText(finalText);
             }
 
-            // 5. Build result content
+            // 7. Build result content
             String content = subtitleFile.buildSrtContent();
 
-            // 6. Save file
+            // 8. Save file
             String fileName = fileStorageService.saveConvertedFile(
                     content,
                     file.getOriginalFilename()
@@ -96,7 +124,7 @@ public class SubtitleServiceImpl implements SubtitleService {
 
             log.info("File successfully converted: {}", fileName);
 
-            // 7. Build response
+            // 9. Build response
             return SubtitleResponse.builder()
                     .fileName(fileName)
                     .originalFileName(file.getOriginalFilename())
