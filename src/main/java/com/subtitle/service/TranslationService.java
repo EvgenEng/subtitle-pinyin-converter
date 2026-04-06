@@ -1,17 +1,15 @@
 package com.subtitle.service;
 
-import org.springframework.stereotype.Service;
-
-@Service
-public class TranslationService {
+/**
+ * Service for translating subtitle text.
+ */
+public interface TranslationService {
 
     /**
-     * Temporary translation stub.
+     * Translate Chinese text to Russian.
      *
-     * @param text Chinese text
-     * @return placeholder translation
+     * @param text original text
+     * @return translated text
      */
-    public String translateToRussian(String text) {
-        return "[RU translation pending] " + text;
-    }
+    String translateToRussian(String text);
 }

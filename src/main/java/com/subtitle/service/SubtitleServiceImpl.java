@@ -41,15 +41,25 @@ public class SubtitleServiceImpl implements SubtitleService {
     @Transactional
     public SubtitleResponse convertSrtToPinyin(MultipartFile file, SubtitleUploadRequest request) {
 
+        log.info("Starting subtitle conversion. File: {}, mode: {}",
+                file.getOriginalFilename(),
+                request.getMode());
+
         try {
+            // 1. Validation
             fileValidator.validate(file);
 
+            // 2. Read file
             byte[] bytes = file.getBytes();
 
+            // 3. Parse SRT
             SubtitleFile subtitleFile = srtParser.parse(
                     new ByteArrayInputStream(bytes)
             );
 
+            log.debug("Parsed {} subtitle blocks", subtitleFile.getBlockCount());
+
+            // 4. Process each block
             for (SubtitleBlock block : subtitleFile.getBlocks()) {
 
                 String original = block.getOriginalText();
@@ -75,13 +85,18 @@ public class SubtitleServiceImpl implements SubtitleService {
                 block.setConvertedText(finalText);
             }
 
+            // 5. Build result content
             String content = subtitleFile.buildSrtContent();
 
+            // 6. Save file
             String fileName = fileStorageService.saveConvertedFile(
                     content,
                     file.getOriginalFilename()
             );
 
+            log.info("File successfully converted: {}", fileName);
+
+            // 7. Build response
             return SubtitleResponse.builder()
                     .fileName(fileName)
                     .originalFileName(file.getOriginalFilename())
@@ -94,6 +109,8 @@ public class SubtitleServiceImpl implements SubtitleService {
                     .build();
 
         } catch (IOException e) {
+            log.error("File processing failed", e);
+
             throw new BusinessException(
                     "Failed to process file",
                     ErrorCode.FILE_READ_ERROR,
@@ -122,6 +139,9 @@ public class SubtitleServiceImpl implements SubtitleService {
 
     @Override
     public ResponseEntity<Resource> download(String fileName) {
+
+        log.info("Downloading file: {}", fileName);
+
         Resource resource = fileStorageService.loadFile(fileName);
 
         return ResponseEntity.ok()
