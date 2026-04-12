@@ -5,7 +5,10 @@ import com.subtitle.exception.BusinessException;
 import com.subtitle.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import net.sourceforge.pinyin4j.PinyinHelper;
-import net.sourceforge.pinyin4j.format.*;
+import net.sourceforge.pinyin4j.format.HanyuPinyinCaseType;
+import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
+import net.sourceforge.pinyin4j.format.HanyuPinyinToneType;
+import net.sourceforge.pinyin4j.format.HanyuPinyinVCharType;
 import net.sourceforge.pinyin4j.format.exception.BadHanyuPinyinOutputFormatCombination;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -88,7 +91,7 @@ public class PinyinConverterService {
         // Case
         format.setCaseType(
                 request.getPinyinFormat() == SubtitleUploadRequest.PinyinFormat.CAPITALIZED
-                        ? HanyuPinyinCaseType.LOWERCASE // капитализация позже
+                        ? HanyuPinyinCaseType.LOWERCASE
                         : HanyuPinyinCaseType.LOWERCASE
         );
 
@@ -139,7 +142,6 @@ public class PinyinConverterService {
             return " ";
         }
 
-        // можно расширить под нормализацию пунктуации
         return String.valueOf(c);
     }
 

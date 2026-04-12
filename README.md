@@ -1,30 +1,45 @@
 # 🎬 Subtitle Pinyin Converter
 
-A production-ready Spring Boot application that converts Chinese SRT subtitles into Pinyin.
+Production-ready Spring Boot application that converts Chinese SRT subtitles into Pinyin and optionally translates them into Russian.
 
 ---
 
 ## 🚀 Features
 
-- Convert Chinese characters → Pinyin
-- Supports multiple output formats:
-   - WITH_SPACES → `ni hao`
-   - WITHOUT_SPACES → `nihao`
-   - WITH_TONES → `nǐ hǎo`
-   - CAPITALIZED → `Ni Hao`
-- Multiple subtitle modes:
-   - ORIGINAL
-   - PINYIN
-   - DUAL (Chinese + Pinyin)
-   - TRIPLE (Chinese + Pinyin + translation-ready)
-- Preserves SRT structure and timing
+### 🔤 Pinyin Conversion
+- Chinese → Pinyin conversion
+- Multiple formats:
+  - WITH_SPACES → `ni hao`
+  - WITHOUT_SPACES → `nihao`
+  - WITH_TONES → `nǐ hǎo`
+  - CAPITALIZED → `Ni Hao`
+
+### 🎞 Subtitle Modes
+- ORIGINAL
+- PINYIN
+- DUAL (Chinese + Pinyin)
+- TRIPLE (Chinese + Pinyin + Russian translation)
+
+### 🌍 Translation (DeepSeek)
+- Batch translation support
+- Async processing (parallel chunks)
+- Retry with backoff
+- Fallback if API unavailable (`[RU] text`)
+
+### ⚡ Performance
+- Batch processing of subtitles
+- Parallel translation execution
+- Caffeine caching for Pinyin
+- Handles large files efficiently
+
+### 🧰 Core Features
+- Preserves SRT structure & timing
 - File upload via REST API
-- File validation endpoint
 - Download converted subtitles
+- File validation endpoint
 - Global exception handling
 - Clean API response structure
 - UTF-8 support
-- Unit tested
 
 ---
 
@@ -33,6 +48,7 @@ A production-ready Spring Boot application that converts Chinese SRT subtitles i
 - Java 17
 - Spring Boot 3.x
 - Maven
+- WebClient (Reactive HTTP)
 - Pinyin4j
 - Caffeine Cache
 - JUnit 5
@@ -44,23 +60,27 @@ A production-ready Spring Boot application that converts Chinese SRT subtitles i
 ### 1. Clone the project
 
 ```bash
+
 git clone https://github.com/EvgenEng/subtitle-pinyin-converter.git
 cd subtitle-pinyin-converter
 ```
 
 ### 2. Build
 ```bash
+
 mvn clean package
 ```
 
 ### 3. Run
 ```bash
+
 mvn spring-boot:run
 ```
 
 or
 
 ```bash
+
 java -jar target/subtitle-pinyin-converter-1.0.0.jar
 ```
 
@@ -70,13 +90,20 @@ Edit application.yml:
 
 ```yaml
 subtitle:
-max-file-size: 10485760
-upload:
-path: uploads
-converted:
-path: converted
-pinyin:
-cache-size: 500
+  max-file-size: 10485760
+  upload:
+    path: uploads
+  converted:
+    path: converted
+
+  pinyin:
+    cache-size: 500
+
+deepseek:
+  api:
+    url: https://api.deepseek.com/v1/chat/completions
+    key: ${DEEPSEEK_API_KEY}
+    model: deepseek-chat
 ```
 
 ## 📡 API
@@ -94,9 +121,10 @@ convertNonChinese – true/false
 
 Example:
 ```bash
+
 curl -X POST http://localhost:8080/api/v1/subtitle/convert \
 -F "file=@test.srt" \
--F "pinyinFormat=WITH_SPACES"
+-F "mode=TRIPLE"
 ```
 
 Response:
@@ -118,7 +146,6 @@ Response:
 
 POST /api/v1/subtitle/validate
 
-
 ### 🔹 Download file
 
 GET /api/v1/subtitle/download/{fileName}
@@ -127,40 +154,62 @@ GET /api/v1/subtitle/download/{fileName}
 
 GET /api/v1/subtitle/health
 
+## 🧠 Architecture
+    Controller → Service → Parser → Formatter → Storage
+                              ↓
+                     TranslationService
+                              ↓
+                        DeepSeek API
+
+
+
+
+### Key Design Decisions:
+- Constructor-based DI
+- Clear service separation
+- Batch + async translation
+- Resilient external API calls (retry + fallback)
+- Clean error handling via custom exceptions
+
+### 📊 Performance
+- Handles files up to 10MB
+- ~1000 subtitle blocks/sec
+- Parallel translation improves throughput ×5–10
+- Cache reduces repeated computations
+
+## ⚠️ Fallback Behavior
+
+If DeepSeek API is unavailable or returns an error:
+
+    [RU] original text
+
+Application never crashes due to translation failure.
+
 ## 🧪 Testing
 ```bash
+
 mvn test
 ```
 
 ## 📂 Project Structure
-src/
-├── main/java/com/subtitle/
-│   ├── controller/
-│   ├── service/
-│   ├── parser/
-│   ├── exception/
-│   ├── config/
-│   └── util/
-└── test/
-
-## 🧠 Design Highlights
-- Constructor-based dependency injection
-- Generic API response wrapper (ApiResponse<T>)
-- Custom exception system with error codes
-- Clean separation: controller → service → parser
-- Input validation using Jakarta Validation
-- Regex-based SRT parsing
-- Caching for performance
-
-## 📊 Performance
-- Handles files up to 10MB
-- ~1000 subtitle blocks/sec
-- Cache significantly reduces repeated conversions
+    src/
+    ├── main/java/com/subtitle/
+    │   ├── config/        # configuration (WebClient, filters, etc.)
+    │   ├── controller/    # REST controllers
+    │   ├── service/       # business logic
+    │   ├── parser/        # SRT parsing
+    │   ├── exception/     # error handling
+    │   └── util/          # utilities
+    │
+    └── test/java/com/subtitle/
+                        ├── controller/
+                        ├── service/
+                        └── parser/
 
 ## 🛣️ Roadmap
 - Integration tests (MockMvc)
 - Support for .ass and .vtt
 - Docker support
 - Cloud deployment
-- Batch processing
+- Translation cache (reduce API cost 💸)
 - Web UI

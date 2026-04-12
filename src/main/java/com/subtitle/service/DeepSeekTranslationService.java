@@ -26,10 +26,8 @@ public class DeepSeekTranslationService implements TranslationService {
     @Qualifier("deepSeekWebClient")
     private final WebClient webClient;
 
-    // 🔥 CACHE
     private final Map<String, String> cache = new ConcurrentHashMap<>();
 
-    // 🔥 ограниченный пул потоков (ВАЖНО)
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
 
     private static final int MAX_ATTEMPTS = 3;

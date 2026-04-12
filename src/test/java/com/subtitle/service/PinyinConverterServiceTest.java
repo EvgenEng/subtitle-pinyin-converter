@@ -26,7 +26,7 @@ class PinyinConverterServiceTest {
 
         String result = service.convertToPinyin(chinese, request);
 
-        assertThat(result).isEqualTo("ni hao"); // 🔥 без лишнего пробела
+        assertThat(result).isEqualTo("ni hao");
     }
 
     @Test
