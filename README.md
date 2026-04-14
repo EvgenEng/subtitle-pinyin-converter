@@ -213,3 +213,8 @@ mvn test
 - Cloud deployment
 - Translation cache (reduce API cost 💸)
 - Web UI
+
+## 🐳 Run with Docker
+
+- docker build -t subtitle-app .
+- docker run -p 8080:8080 -e DEEPSEEK_API_KEY=your_key subtitle-app
