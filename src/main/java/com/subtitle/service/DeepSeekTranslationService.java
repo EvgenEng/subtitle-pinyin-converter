@@ -1,5 +1,6 @@
 package com.subtitle.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import com.subtitle.exception.BusinessException;
 import com.subtitle.exception.ErrorCode;
 import com.subtitle.service.dto.DeepSeekRequest;
@@ -12,9 +13,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -26,7 +25,7 @@ public class DeepSeekTranslationService implements TranslationService {
     @Qualifier("deepSeekWebClient")
     private final WebClient webClient;
 
-    private final Map<String, String> cache = new ConcurrentHashMap<>();
+    private final Cache<String, String> cache;
 
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
 
@@ -34,7 +33,7 @@ public class DeepSeekTranslationService implements TranslationService {
     private static final long INITIAL_DELAY_MS = 500;
 
     // ================================
-    // SINGLE TRANSLATION
+    // SINGLE TRANSLATION (С CACHE)
     // ================================
     @Override
     public String translateToRussian(String text) {
@@ -43,28 +42,18 @@ public class DeepSeekTranslationService implements TranslationService {
             return "";
         }
 
-        if (cache.containsKey(text)) {
-            log.debug("Cache hit for text: {}", text);
-            return cache.get(text);
-        }
-
-        try {
-            String translated = callDeepSeek(text);
-            cache.put(text, translated);
-            return translated;
-
-        } catch (Exception e) {
-            log.warn("DeepSeek unavailable, fallback used. Reason: {}", e.getMessage());
-
-            String fallback = "[RU] " + text;
-            cache.put(text, fallback);
-
-            return fallback;
-        }
+        return cache.get(text, key -> {
+            try {
+                return callDeepSeek(key);
+            } catch (Exception e) {
+                log.warn("Fallback used for text: {}", key);
+                return "[RU] " + key;
+            }
+        });
     }
 
     // ================================
-    // BATCH TRANSLATION
+    // BATCH TRANSLATION (С CACHE)
     // ================================
     @Override
     public List<String> translateBatch(List<String> texts) {
@@ -73,19 +62,62 @@ public class DeepSeekTranslationService implements TranslationService {
             return List.of();
         }
 
-        try {
-            return callDeepSeekBatch(texts);
-        } catch (Exception e) {
-            log.warn("Batch translation failed, fallback used");
+        int CHUNK_SIZE = 5;
 
-            return texts.stream()
-                    .map(t -> {
-                        String fallback = "[RU] " + t;
-                        cache.put(t, fallback);
-                        return fallback;
-                    })
-                    .toList();
+        List<List<String>> chunks = new ArrayList<>();
+
+        for (int i = 0; i < texts.size(); i += CHUNK_SIZE) {
+            chunks.add(texts.subList(i, Math.min(i + CHUNK_SIZE, texts.size())));
         }
+
+        List<CompletableFuture<List<String>>> futures = new ArrayList<>();
+
+        for (List<String> chunk : chunks) {
+
+            CompletableFuture<List<String>> future =
+                    CompletableFuture.supplyAsync(() -> processChunk(chunk), executor);
+
+            futures.add(future);
+        }
+
+        List<String> result = new ArrayList<>();
+
+        for (CompletableFuture<List<String>> future : futures) {
+            result.addAll(future.join());
+        }
+
+        return result;
+    }
+
+    // ================================
+    // PROCESS CHUNK
+    // ================================
+    private List<String> processChunk(List<String> chunk) {
+
+        log.info("Processing chunk in thread: {}", Thread.currentThread().getName());
+
+        List<String> result = new ArrayList<>();
+
+        for (String text : chunk) {
+
+            if (text == null || text.isBlank()) {
+                result.add("");
+                continue;
+            }
+
+            String translated = cache.get(text, key -> {
+                try {
+                    return callDeepSeek(key);
+                } catch (Exception e) {
+                    log.warn("Fallback used for text: {}", key);
+                    return "[RU] " + key;
+                }
+            });
+
+            result.add(translated);
+        }
+
+        return result;
     }
 
     // ================================
@@ -143,81 +175,6 @@ public class DeepSeekTranslationService implements TranslationService {
         }
 
         throw new IllegalStateException("Unexpected retry failure");
-    }
-
-    // ================================
-    // ASYNC BATCH (С ОГРАНИЧЕНИЕМ ПОТОКОВ)
-    // ================================
-    private List<String> callDeepSeekBatch(List<String> texts) {
-
-        int CHUNK_SIZE = 5;
-
-        List<List<String>> chunks = new ArrayList<>();
-
-        for (int i = 0; i < texts.size(); i += CHUNK_SIZE) {
-            chunks.add(texts.subList(i, Math.min(i + CHUNK_SIZE, texts.size())));
-        }
-
-        List<CompletableFuture<List<String>>> futures = new ArrayList<>();
-
-        for (List<String> chunk : chunks) {
-
-            CompletableFuture<List<String>> future =
-                    CompletableFuture.supplyAsync(() -> processChunk(chunk), executor);
-
-            futures.add(future);
-        }
-
-        List<String> result = new ArrayList<>();
-
-        for (CompletableFuture<List<String>> future : futures) {
-            result.addAll(future.join());
-        }
-
-        return result;
-    }
-
-    // ================================
-    // PROCESS CHUNK
-    // ================================
-    private List<String> processChunk(List<String> chunk) {
-
-        log.info("Processing chunk in thread: {}", Thread.currentThread().getName());
-
-        List<String> result = new ArrayList<>();
-
-        for (String text : chunk) {
-
-            if (text == null || text.isBlank()) {
-                result.add("");
-                continue;
-            }
-
-            if (cache.containsKey(text)) {
-                log.debug("Cache hit for text: {}", text);
-                result.add(cache.get(text));
-                continue;
-            }
-
-            try {
-                String translated = callDeepSeek(text);
-
-                cache.put(text, translated);
-
-                result.add(translated);
-
-            } catch (Exception e) {
-                log.warn("Chunk item failed, fallback used");
-
-                String fallback = "[RU] " + text;
-
-                cache.put(text, fallback);
-
-                result.add(fallback);
-            }
-        }
-
-        return result;
     }
 
     // ================================
