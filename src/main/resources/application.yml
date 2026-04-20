@@ -4,11 +4,12 @@ spring:
 
   servlet:
     multipart:
+      enabled: true
       max-file-size: 10MB
       max-request-size: 10MB
-      enabled: true
       location: ${java.io.tmpdir}
       file-size-threshold: 2KB
+      resolve-lazily: true
 
   messages:
     basename: messages
@@ -50,6 +51,7 @@ subtitle:
 # ===============================
 logging:
   level:
+    root: INFO
     com.subtitle: DEBUG
     org.springframework.web: INFO
     org.springframework.web.multipart: DEBUG
@@ -79,8 +81,17 @@ management:
     health:
       show-details: always
 
+# ===============================
+# DeepSeek API
+# ===============================
 deepseek:
   api:
     url: https://api.deepseek.com/v1/chat/completions
-    key: ${DEEPSEEK_API_KEY}
+    key: ${DEEPSEEK_API_KEY:}
     model: deepseek-chat
+
+# ===============================
+# Security
+# ===============================
+app:
+  api-key: ${API_KEY:dev-key}

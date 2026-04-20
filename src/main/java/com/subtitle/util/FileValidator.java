@@ -2,40 +2,30 @@ package com.subtitle.util;
 
 import com.subtitle.exception.BusinessException;
 import com.subtitle.exception.ErrorCode;
+import com.subtitle.parser.SrtParser;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * Utility class for file validation.
- *
- */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class FileValidator {
 
-    private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList(".srt", ".SRT");
-    private static final List<String> ALLOWED_CONTENT_TYPES = Arrays.asList(
-            "text/plain",
-            "application/x-subrip",
-            "text/x-srt"
-    );
+    private final SrtParser srtParser;
 
-    @Value("${subtitle.max-file-size:10485760}") // 10MB default
+    private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList(".srt");
+
+    @Value("${subtitle.max-file-size:10485760}")
     private long maxFileSize;
 
-    /**
-     * Validate uploaded file.
-     *
-     * @param file File to validate
-     * @throws BusinessException if validation fails
-     * @throws IOException if file reading fails
-     */
     public void validate(MultipartFile file) throws IOException {
         validateNotNull(file);
         validateEmpty(file);
@@ -59,8 +49,7 @@ public class FileValidator {
     private void validateFileSize(MultipartFile file) {
         if (file.getSize() > maxFileSize) {
             throw new BusinessException(
-                    String.format("File size %d exceeds maximum allowed %d bytes",
-                            file.getSize(), maxFileSize),
+                    "File too large",
                     ErrorCode.FILE_TOO_LARGE
             );
         }
@@ -68,12 +57,14 @@ public class FileValidator {
 
     private void validateFileExtension(MultipartFile file) {
         String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || originalFilename.isEmpty()) {
+
+        if (originalFilename == null || originalFilename.isBlank()) {
             throw new BusinessException("Invalid filename", ErrorCode.INVALID_FILE_TYPE);
         }
 
-        String extension = getFileExtension(originalFilename);
-        if (!ALLOWED_EXTENSIONS.contains(extension.toLowerCase())) {
+        String extension = getFileExtension(originalFilename).toLowerCase();
+
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
             throw new BusinessException(
                     "Invalid file extension: " + extension,
                     ErrorCode.INVALID_FILE_TYPE
@@ -82,13 +73,12 @@ public class FileValidator {
     }
 
     private void validateContent(MultipartFile file) throws IOException {
-        // Check if file contains valid SRT format
-        byte[] bytes = file.getBytes();
-        String content = new String(bytes, "UTF-8");
 
-        if (!content.contains("-->")) {
+        String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+
+        if (!srtParser.isValidSrt(content)) {
             throw new BusinessException(
-                    "File does not appear to be a valid SRT file",
+                    "Invalid SRT structure",
                     ErrorCode.INVALID_SRT_FORMAT
             );
         }
@@ -96,9 +86,6 @@ public class FileValidator {
 
     private String getFileExtension(String filename) {
         int lastDotIndex = filename.lastIndexOf('.');
-        if (lastDotIndex == -1) {
-            return "";
-        }
-        return filename.substring(lastDotIndex);
+        return lastDotIndex == -1 ? "" : filename.substring(lastDotIndex);
     }
 }

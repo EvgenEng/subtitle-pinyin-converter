@@ -1,21 +1,21 @@
 package com.subtitle.service;
 
-import com.github.benmanes.caffeine.cache.Cache;
 import com.subtitle.exception.BusinessException;
 import com.subtitle.exception.ErrorCode;
 import com.subtitle.service.dto.DeepSeekRequest;
 import com.subtitle.service.dto.DeepSeekResponse;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 @Slf4j
 @Service
@@ -25,16 +25,17 @@ public class DeepSeekTranslationService implements TranslationService {
     @Qualifier("deepSeekWebClient")
     private final WebClient webClient;
 
-    private final Cache<String, String> cache;
+    private final CacheManager cacheManager;
+
+    private Cache getCache() {
+        return cacheManager.getCache("translationCache");
+    }
 
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
 
     private static final int MAX_ATTEMPTS = 3;
     private static final long INITIAL_DELAY_MS = 500;
 
-    // ================================
-    // SINGLE TRANSLATION (С CACHE)
-    // ================================
     @Override
     public String translateToRussian(String text) {
 
@@ -42,19 +43,23 @@ public class DeepSeekTranslationService implements TranslationService {
             return "";
         }
 
-        return cache.get(text, key -> {
-            try {
-                return callDeepSeek(key);
-            } catch (Exception e) {
-                log.warn("Fallback used for text: {}", key);
-                return "[RU] " + key;
-            }
-        });
+        Cache cache = getCache();
+
+        String cached = cache.get(text, String.class);
+        if (cached != null) {
+            return cached;
+        }
+
+        try {
+            String result = callDeepSeek(text);
+            cache.put(text, result);
+            return result;
+        } catch (Exception e) {
+            log.warn("Fallback used for text: {}", text);
+            return "[RU] " + text;
+        }
     }
 
-    // ================================
-    // BATCH TRANSLATION (С CACHE)
-    // ================================
     @Override
     public List<String> translateBatch(List<String> texts) {
 
@@ -63,7 +68,6 @@ public class DeepSeekTranslationService implements TranslationService {
         }
 
         int CHUNK_SIZE = 5;
-
         List<List<String>> chunks = new ArrayList<>();
 
         for (int i = 0; i < texts.size(); i += CHUNK_SIZE) {
@@ -73,11 +77,9 @@ public class DeepSeekTranslationService implements TranslationService {
         List<CompletableFuture<List<String>>> futures = new ArrayList<>();
 
         for (List<String> chunk : chunks) {
-
-            CompletableFuture<List<String>> future =
-                    CompletableFuture.supplyAsync(() -> processChunk(chunk), executor);
-
-            futures.add(future);
+            futures.add(
+                    CompletableFuture.supplyAsync(() -> processChunk(chunk), executor)
+            );
         }
 
         List<String> result = new ArrayList<>();
@@ -89,12 +91,11 @@ public class DeepSeekTranslationService implements TranslationService {
         return result;
     }
 
-    // ================================
-    // PROCESS CHUNK
-    // ================================
     private List<String> processChunk(List<String> chunk) {
 
         log.info("Processing chunk in thread: {}", Thread.currentThread().getName());
+
+        Cache cache = getCache();
 
         List<String> result = new ArrayList<>();
 
@@ -105,31 +106,32 @@ public class DeepSeekTranslationService implements TranslationService {
                 continue;
             }
 
-            String translated = cache.get(text, key -> {
-                try {
-                    return callDeepSeek(key);
-                } catch (Exception e) {
-                    log.warn("Fallback used for text: {}", key);
-                    return "[RU] " + key;
-                }
-            });
+            String cached = cache.get(text, String.class);
 
-            result.add(translated);
+            if (cached != null) {
+                result.add(cached);
+                continue;
+            }
+
+            try {
+                String translated = callDeepSeek(text);
+                cache.put(text, translated);
+                result.add(translated);
+            } catch (Exception e) {
+                log.warn("Fallback used for text: {}", text);
+                result.add("[RU] " + text);
+            }
         }
 
         return result;
     }
 
-    // ================================
-    // RETRY + BACKOFF
-    // ================================
     private String callDeepSeek(String text) {
 
         long delay = INITIAL_DELAY_MS;
 
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
-                log.debug("DeepSeek attempt {}", attempt);
 
                 DeepSeekRequest request = DeepSeekRequest.builder()
                         .model("deepseek-chat")
@@ -177,9 +179,6 @@ public class DeepSeekTranslationService implements TranslationService {
         throw new IllegalStateException("Unexpected retry failure");
     }
 
-    // ================================
-    // UTIL
-    // ================================
     private void sleep(long delay) {
         try {
             Thread.sleep(delay);
@@ -187,5 +186,11 @@ public class DeepSeekTranslationService implements TranslationService {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Retry interrupted", e);
         }
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        log.info("Shutting down DeepSeek executor");
+        executor.shutdown();
     }
 }
