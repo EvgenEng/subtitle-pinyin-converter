@@ -1,21 +1,20 @@
 package com.subtitle.config;
 
-import io.github.bucket4j.Bucket;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
 @Component
-@RequiredArgsConstructor
-public class RateLimitFilter extends OncePerRequestFilter {
+public class ApiKeyFilter extends OncePerRequestFilter {
 
-    private final RateLimitConfig rateLimitConfig;
+    @Value("${app.api-key}")
+    private String apiKey;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -23,15 +22,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        String ip = request.getRemoteAddr();
+        if (request.getRequestURI().contains("/health")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-        Bucket bucket = rateLimitConfig.resolveBucket(ip);
+        String headerKey = request.getHeader("X-API-KEY");
 
-        if (bucket.tryConsume(1)) {
+        if (apiKey != null && apiKey.equals(headerKey)) {
             filterChain.doFilter(request, response);
         } else {
-            response.setStatus(429);
-            response.getWriter().write("Too many requests");
+            response.setStatus(401);
+            response.getWriter().write("Unauthorized");
         }
     }
 }
