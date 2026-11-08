@@ -67,6 +67,16 @@ public class SubtitleController {
     }
 
     /**
+     * Get basic statistics for a converted subtitle file.
+     */
+    @GetMapping("/statistics/{fileName}")
+    public ResponseEntity<ApiResponse<String>> getFileStatistics(@PathVariable String fileName) {
+        return ResponseEntity.ok(
+                ApiResponse.success("File statistics", subtitleService.getFileStatistics(fileName))
+        );
+    }
+
+    /**
      * Health check endpoint.
      */
     @GetMapping("/health")

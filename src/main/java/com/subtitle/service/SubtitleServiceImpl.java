@@ -162,7 +162,43 @@ public class SubtitleServiceImpl implements SubtitleService {
 
     @Override
     public String getFileStatistics(String fileName) {
-        return "Not implemented yet";
+        Resource resource = fileStorageService.loadFile(fileName);
+        try {
+            SubtitleFile subtitleFile = srtParser.parse(resource.getInputStream());
+            List<SubtitleBlock> blocks = subtitleFile.getBlocks();
+
+            long chineseCharacters = blocks.stream()
+                    .flatMapToInt(block -> block.getOriginalText().codePoints())
+                    .filter(codePoint ->
+                            Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN)
+                    .count();
+
+            long emptyBlocks = blocks.stream()
+                    .filter(block -> block.getOriginalText() == null
+                            || block.getOriginalText().isBlank())
+                    .count();
+
+            long firstStart = blocks.stream()
+                    .mapToLong(block -> srtParser.toMillis(block.getStartTime()))
+                    .min().orElse(0);
+            long lastEnd = blocks.stream()
+                    .mapToLong(block -> srtParser.toMillis(block.getEndTime()))
+                    .max().orElse(0);
+            long durationMillis = Math.max(0, lastEnd - firstStart);
+
+            return String.format(
+                    "fileName=%s%nfileSizeBytes=%d%nsubtitleBlocks=%d%nchineseCharacters=%d%nemptyBlocks=%d%ndurationMillis=%d",
+                    fileName,
+                    resource.contentLength(),
+                    blocks.size(),
+                    chineseCharacters,
+                    emptyBlocks,
+                    durationMillis
+            );
+        } catch (IOException e) {
+            throw new BusinessException("Failed to read converted subtitle file",
+                    ErrorCode.FILE_READ_ERROR, e);
+        }
     }
 
     @Override

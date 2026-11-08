@@ -19,7 +19,7 @@ public enum ErrorCode {
 
     // SRT parsing errors
     INVALID_SRT_FORMAT("SRT_001", "Invalid SRT format", HttpStatus.BAD_REQUEST),
-    INVALID_TIMECODE("SRT_002", "Invalid timecode format", HttpStatus.BAD_REQUEST),
+    INVALID_TIMECODE("SRT_002", "Invalid timecode or time range", HttpStatus.BAD_REQUEST),
     MISSING_BLOCK_INDEX("SRT_003", "Missing block index", HttpStatus.BAD_REQUEST),
 
     // Pinyin conversion errors

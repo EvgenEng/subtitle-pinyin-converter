@@ -6,7 +6,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import com.jayway.jsonpath.JsonPath;
+import java.nio.charset.StandardCharsets;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -16,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@TestPropertySource(properties = "app.api-key=test-api-key")
 class SubtitleControllerIntegrationTest {
 
     @Autowired
@@ -38,11 +43,12 @@ class SubtitleControllerIntegrationTest {
                 "file",
                 "test.srt",
                 MediaType.TEXT_PLAIN_VALUE,
-                srtContent.getBytes()
+                srtContent.getBytes(StandardCharsets.UTF_8)
         );
 
         mockMvc.perform(multipart("/api/v1/subtitle/convert")
                         .file(file)
+                        .header("X-API-KEY", "test-api-key")
                         .param("pinyinFormat", "WITH_SPACES")
                         .param("convertNonChinese", "false"))
                 .andExpect(status().isOk())
@@ -62,7 +68,8 @@ class SubtitleControllerIntegrationTest {
         );
 
         mockMvc.perform(multipart("/api/v1/subtitle/convert")
-                        .file(file))
+                        .file(file)
+                        .header("X-API-KEY", "test-api-key"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -74,11 +81,12 @@ class SubtitleControllerIntegrationTest {
                 "file",
                 "test.txt",
                 MediaType.TEXT_PLAIN_VALUE,
-                "invalid content".getBytes()
+                "invalid content".getBytes(StandardCharsets.UTF_8)
         );
 
         mockMvc.perform(multipart("/api/v1/subtitle/convert")
-                        .file(file))
+                        .file(file)
+                        .header("X-API-KEY", "test-api-key"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -96,18 +104,24 @@ class SubtitleControllerIntegrationTest {
                 "file",
                 "test.srt",
                 MediaType.TEXT_PLAIN_VALUE,
-                srtContent.getBytes()
+                srtContent.getBytes(StandardCharsets.UTF_8)
         );
 
-        // сначала загружаем файл
-        mockMvc.perform(multipart("/api/v1/subtitle/convert")
+        // Upload first and read the generated filename (it contains a unique suffix).
+        MvcResult uploadResult = mockMvc.perform(multipart("/api/v1/subtitle/convert")
                         .file(file)
+                        .header("X-API-KEY", "test-api-key")
                         .param("pinyinFormat", "WITH_SPACES")
                         .param("convertNonChinese", "false"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // потом скачиваем
-        mockMvc.perform(get("/api/v1/subtitle/download/test_pinyin.srt"))
+        String generatedFileName = JsonPath.read(
+                uploadResult.getResponse().getContentAsString(), "$.data.fileName");
+
+        // Download the exact file returned by the conversion endpoint.
+        mockMvc.perform(get("/api/v1/subtitle/download/{fileName}", generatedFileName)
+                        .header("X-API-KEY", "test-api-key"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Disposition",
                         org.hamcrest.Matchers.containsString("attachment")));

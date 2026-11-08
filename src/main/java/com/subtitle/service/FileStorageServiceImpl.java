@@ -54,7 +54,10 @@ public class FileStorageServiceImpl implements FileStorageService {
                 ? safeName.substring(0, dotIndex)
                 : safeName;
 
-        String fileName = baseName + "_pinyin.srt";
+        // A short random suffix prevents concurrent/repeated conversions from overwriting
+        // an earlier result with the same original filename.
+        String uniqueId = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String fileName = baseName + "_" + uniqueId + "_pinyin.srt";
 
         Path path = dir.resolve(fileName);
         Files.write(path, content.getBytes(StandardCharsets.UTF_8));

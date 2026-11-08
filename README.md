@@ -11,7 +11,7 @@ Production-ready Spring Boot application that converts Chinese SRT subtitles int
 - Multiple formats:
   - WITH_SPACES → `ni hao`
   - WITHOUT_SPACES → `nihao`
-  - WITH_TONES → `nǐ hǎo`
+  - WITH_TONES → `nǐ hǎo` (tone marks)
   - CAPITALIZED → `Ni Hao`
 
 ### 🎞 Subtitle Modes
@@ -34,6 +34,10 @@ Production-ready Spring Boot application that converts Chinese SRT subtitles int
 
 ### 🧰 Core Features
 - Preserves SRT structure & timing
+- Strict block and time-range validation (reports the invalid block number)
+- Supports Windows CRLF line endings and UTF-8 BOM
+- Generates collision-resistant output filenames
+- File statistics endpoint
 - File upload via REST API
 - Download converted subtitles
 - File validation endpoint
@@ -133,11 +137,11 @@ Response:
 "success": true,
 "message": "File successfully converted to Pinyin",
 "data": {
-"fileName": "test_pinyin.srt",
+"fileName": "test_a1b2c3d4_pinyin.srt",
 "originalFileName": "test.srt",
 "blockCount": 2,
 "conversionTime": "2026-04-02T13:57:17",
-"downloadUrl": "/api/v1/subtitle/download/test_pinyin.srt"
+"downloadUrl": "/api/v1/subtitle/download/test_a1b2c3d4_pinyin.srt"
 }
 }
 ```
@@ -149,6 +153,12 @@ POST /api/v1/subtitle/validate
 ### 🔹 Download file
 
 GET /api/v1/subtitle/download/{fileName}
+
+### 🔹 File statistics
+
+GET /api/v1/subtitle/statistics/{fileName}
+
+Returns file size in bytes, subtitle block count, Chinese character count, empty block count and total subtitle timeline duration in milliseconds.
 
 ### 🔹 Health check
 
@@ -187,9 +197,10 @@ Application never crashes due to translation failure.
 
 ## 🧪 Testing
 ```bash
-
-mvn test
+mvn clean verify
 ```
+
+GitHub Actions runs the same Maven verification on pushes and pull requests to `main` / `master`.
 
 ## 📂 Project Structure
     src/

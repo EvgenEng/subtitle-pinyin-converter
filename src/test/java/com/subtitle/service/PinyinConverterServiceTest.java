@@ -12,7 +12,7 @@ class PinyinConverterServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PinyinConverterService();
+        service = new PinyinConverterService(new PinyinCharacterCache());
     }
 
     @Test
@@ -39,11 +39,7 @@ class PinyinConverterServiceTest {
 
         String result = service.convertToPinyin(chinese, request);
 
-        assertThat(result)
-                .satisfiesAnyOf(
-                        r -> assertThat(r).contains("ni3"),
-                        r -> assertThat(r).contains("nǐ")
-                );
+        assertThat(result).contains("n\u01D0").contains("h\u01CEo");
     }
 
     @Test
