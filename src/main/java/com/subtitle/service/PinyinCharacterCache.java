@@ -10,12 +10,22 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.text.Normalizer;
+import java.util.Map;
 
 /**
  * Separate Spring bean so calls pass through the cache proxy.
  */
 @Service
 public class PinyinCharacterCache {
+
+    // pinyin4j outputs breve (ĭ ă ŏ ĕ ŭ) for third tone; standard pinyin uses caron (ǐ ǎ ǒ ě ǔ).
+    private static final Map<Character, Character> BREVE_TO_CARON = Map.of(
+            '\u012D', '\u01D0', // ĭ → ǐ
+            '\u0103', '\u01CE', // ă → ǎ
+            '\u014F', '\u01D2', // ŏ → ǒ
+            '\u0115', '\u011B', // ĕ → ě
+            '\u016D', '\u01D4'  // ŭ → ǔ
+    );
 
     @Cacheable(
             value = "pinyinCache",
@@ -36,7 +46,12 @@ public class PinyinCharacterCache {
                     ? readings[0]
                     : String.valueOf(character);
             // pinyin4j may return combining tone marks; normalize to a stable NFC form.
-            return Normalizer.normalize(converted, Normalizer.Form.NFC);
+            String nfc = Normalizer.normalize(converted, Normalizer.Form.NFC);
+            StringBuilder sb = new StringBuilder(nfc.length());
+            for (char c : nfc.toCharArray()) {
+                sb.append(BREVE_TO_CARON.getOrDefault(c, c));
+            }
+            return sb.toString();
         } catch (BadHanyuPinyinOutputFormatCombination ex) {
             return String.valueOf(character);
         }

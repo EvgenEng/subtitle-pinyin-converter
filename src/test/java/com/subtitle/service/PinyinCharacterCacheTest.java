@@ -35,9 +35,11 @@ class PinyinCharacterCacheTest {
 
         assertThat(result).isEqualTo("n\u01D0");
         assertThat(cacheManager.getCache("pinyinCache")).isNotNull();
-        assertThat(cacheManager.getCache("pinyinCache").get(
-                "你_WITH_TONE_MARK_LOWERCASE_WITH_U_UNICODE"
-        )).isNotNull();
+        // pinyin4j types have no custom toString(), so build the key from the same objects.
+        String expectedKey = "你_" + HanyuPinyinToneType.WITH_TONE_MARK
+                + "_" + HanyuPinyinCaseType.LOWERCASE
+                + "_" + HanyuPinyinVCharType.WITH_U_UNICODE;
+        assertThat(cacheManager.getCache("pinyinCache").get(expectedKey)).isNotNull();
     }
 
     @Configuration
